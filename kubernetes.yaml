@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pr0gramm-exporter
+  namespace: monitoring
+  labels:
+    app: pr0gramm-exporter
+spec:
+  replicas: 1
+  template:
+    metadata:
+      name: pr0gramm-exporter
+      labels:
+        app: pr0gramm-exporter
+    spec:
+      containers:
+        - name: pr0gramm-exporter
+          image: metalmatze/pr0gramm-exporter
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: internal
+              containerPort: 4242
+      restartPolicy: Always
+  selector:
+    matchLabels:
+      app: pr0gramm-exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pr0gramm-exporter
+  namespace: monitoring
+  labels:
+    app: pr0gramm-exporter
+    prometheus: metalmatze
+spec:
+  selector:
+    matchLabels:
+      app: pr0gramm-exporter
+  podMetricsEndpoints:
+    - port: internal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: metalmatze
+    role: alert-rules
+  name: pr0gramm-exporter
+  namespace: monitoring
+spec:
+  groups:
+    - name: pr0gramm
+      rules:
+        - alert: Pr0grammStatusFailing
+          annotations:
+            message: The pr0gramm returns non 200 status code
+          expr: |-
+            up{job="monitoring/pr0gramm-exporter"} == 0
+            or
+            pr0gramm_http_status_code{job="monitoring/pr0gramm-exporter",path="/"} != 200
+          for: 15m
+          labels:
+            severity: warning
+            telegram: pr0alerts
+        - alert: Pr0grammAPINoJSON
+          annotations:
+            message: The pr0gramm API doesn't return JSON on /api/items
+          expr: |-
+            up{job="monitoring/pr0gramm-exporter"} == 0
+            or
+            pr0gramm_api_json_decodable{job="monitoring/pr0gramm-exporter", path="/api/items"} == 0
+          for: 15m
+          labels:
+            severity: warning
+            telegram: pr0alerts
